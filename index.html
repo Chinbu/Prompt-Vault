@@ -104,22 +104,22 @@
             </div>
         </div>
 
-        <!-- Footer with In-App Links -->
+        <!-- Footer -->
         <footer class="footer">
             <div class="footer-links">
-                <a href="#" data-link="about">
+                <a href="#" data-page="about">
                     <i class="fas fa-info-circle"></i> About
                 </a>
-                <a href="#" data-link="privacy">
+                <a href="#" data-page="privacy">
                     <i class="fas fa-shield-alt"></i> Privacy
                 </a>
-                <a href="#" data-link="terms">
+                <a href="#" data-page="terms">
                     <i class="fas fa-file-contract"></i> Terms
                 </a>
-                <a href="#" data-link="channel">
+                <a href="https://t.me/+4s4mTS5NRi02M2E1" target="_blank">
                     <i class="fab fa-telegram"></i> Channel
                 </a>
-                <a href="#" data-link="contact">
+                <a href="#" data-page="contact">
                     <i class="fas fa-envelope"></i> Contact
                 </a>
             </div>
@@ -134,7 +134,7 @@
         </button>
     </div>
 
-    <!-- Modals -->
+    <!-- Prompt Modal -->
     <div class="modal" id="promptModal">
         <div class="modal-content glass">
             <button class="modal-close" id="modalClose">
@@ -146,13 +146,15 @@
         </div>
     </div>
 
-    <!-- In-App WebView Modal -->
-    <div class="modal" id="webviewModal">
-        <div class="modal-content glass" style="max-height: 90vh; height: 85vh;">
-            <button class="modal-close" id="webviewClose">
+    <!-- Page Modal (For About, Privacy, Terms, Contact) -->
+    <div class="modal" id="pageModal">
+        <div class="modal-content glass" style="max-height: 90vh; overflow-y: auto;">
+            <button class="modal-close" id="pageModalClose">
                 <i class="fas fa-times"></i>
             </button>
-            <iframe id="webviewIframe" style="width: 100%; height: calc(100% - 50px); border: none; border-radius: 8px;"></iframe>
+            <div class="page-content" id="pageContent">
+                <!-- Dynamic page content -->
+            </div>
         </div>
     </div>
 
