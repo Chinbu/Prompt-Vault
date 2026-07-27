@@ -48,9 +48,9 @@ const elements = {
     promptModal: $('#promptModal'),
     modalBody: $('#modalBody'),
     modalClose: $('#modalClose'),
-    webviewModal: $('#webviewModal'),
-    webviewIframe: $('#webviewIframe'),
-    webviewClose: $('#webviewClose'),
+    pageModal: $('#pageModal'),
+    pageContent: $('#pageContent'),
+    pageModalClose: $('#pageModalClose'),
     toast: $('#toast'),
     floatingTelegram: $('#floatingTelegram'),
     adOverlay: $('#adOverlay'),
@@ -248,6 +248,12 @@ class AdManager {
             console.log('✅ Monetag SDK loaded');
         } else {
             console.warn('⚠️ Monetag SDK not loaded');
+            setTimeout(() => {
+                if (typeof show_11417937 === 'function') {
+                    this.isReady = true;
+                    console.log('✅ Monetag SDK loaded after delay');
+                }
+            }, 3000);
         }
     }
     
@@ -261,23 +267,26 @@ class AdManager {
         const now = Date.now();
         if (now - this.lastAdTime < this.adCooldown || this.adInProgress) return;
         
+        if (typeof show_11417937 !== 'function') {
+            console.warn('⚠️ Monetag not available for auto ad');
+            return;
+        }
+        
         try {
             this.adInProgress = true;
-            if (typeof show_11417937 === 'function') {
-                await show_11417937({
-                    type: 'inApp',
-                    inAppSettings: {
-                        frequency: 2,
-                        capping: 0.1,
-                        interval: 30,
-                        timeout: 5,
-                        everyPage: false
-                    }
-                });
-                this.lastAdTime = Date.now();
-                if (window.app?.toast) {
-                    window.app.toast.show('Thanks for watching!', 'success');
+            await show_11417937({
+                type: 'inApp',
+                inAppSettings: {
+                    frequency: 2,
+                    capping: 0.1,
+                    interval: 30,
+                    timeout: 5,
+                    everyPage: false
                 }
+            });
+            this.lastAdTime = Date.now();
+            if (window.app?.toast) {
+                window.app.toast.show('Thanks for watching!', 'success');
             }
         } catch (error) {
             console.error('Auto ad error:', error);
@@ -469,7 +478,7 @@ class AppController {
             });
         });
         
-        // Modal
+        // Prompt Modal
         elements.modalClose.addEventListener('click', () => {
             elements.promptModal.classList.remove('active');
         });
@@ -480,55 +489,97 @@ class AppController {
             }
         });
         
-        // WebView Modal
-        elements.webviewClose.addEventListener('click', () => {
-            elements.webviewModal.classList.remove('active');
+        // Page Modal
+        elements.pageModalClose.addEventListener('click', () => {
+            elements.pageModal.classList.remove('active');
         });
         
-        elements.webviewModal.addEventListener('click', (e) => {
-            if (e.target === elements.webviewModal) {
-                elements.webviewModal.classList.remove('active');
+        elements.pageModal.addEventListener('click', (e) => {
+            if (e.target === elements.pageModal) {
+                elements.pageModal.classList.remove('active');
             }
         });
         
         // ========================================
-        // IN-APP LINK HANDLER - FIXED
+        // PAGE LINKS HANDLER
         // ========================================
-        document.querySelectorAll('.footer-links a[data-link]').forEach(link => {
+        document.querySelectorAll('.footer-links a[data-page]').forEach(link => {
             link.addEventListener('click', (e) => {
                 e.preventDefault();
-                const key = link.dataset.link;
-                const url = CONFIG.links[key];
-                if (url) {
-                    this.openInApp(url);
-                }
+                const page = link.dataset.page;
+                this.openPage(page);
             });
         });
         
         // Telegram - Floating Button
         elements.floatingTelegram.addEventListener('click', () => {
-            window.open(CONFIG.links.telegramGroup, '_blank');
+            window.open(CONFIG.social.telegramGroup, '_blank');
         });
     }
     
     // ========================================
-    // OPEN LINK IN APP (In-App WebView)
+    // OPEN PAGE IN-APP
     // ========================================
-    openInApp(url) {
-        // Check if it's a Telegram link
-        if (url.includes('t.me')) {
-            // Open Telegram links in external browser (Telegram app handles it)
-            window.open(url, '_blank');
+    openPage(pageKey) {
+        const pageData = CONFIG.pages[pageKey];
+        if (!pageData) {
+            this.toast.show('Page not found', 'error');
             return;
         }
         
-        // For Telegra.ph and other web links - open in in-app WebView
-        const iframe = elements.webviewIframe;
-        iframe.src = url;
-        elements.webviewModal.classList.add('active');
+        const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+        const textColor = isDark ? '#e8e8ff' : '#1a1a2e';
+        const bgColor = isDark ? '#14142e' : '#ffffff';
+        const borderColor = isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.08)';
         
-        // Show toast
-        this.toast.show('Loading...', 'info', 1500);
+        // Process content - handle Telegram links for Contact page
+        let content = pageData.content;
+        
+        // For contact page, process Telegram links to open in new tab
+        if (pageKey === 'contact') {
+            // Add target="_blank" to all Telegram links
+            content = content.replace(
+                /<a href="(https:\/\/t\.me\/[^"]+)"[^>]*>/g,
+                '<a href="$1" target="_blank" style="display:inline-block; background:linear-gradient(135deg, #0088cc, #00a2e8); color:#ffffff; padding:10px 20px; border-radius:50px; text-decoration:none; font-weight:600; margin-top:8px; transition:all 0.3s ease;" onmouseover="this.style.transform=\'scale(1.05)\'" onmouseout="this.style.transform=\'scale(1)\'">'
+            );
+        }
+        
+        elements.pageContent.innerHTML = `
+            <div style="
+                padding: 8px 4px 20px;
+                color: ${textColor};
+                font-size: 15px;
+                line-height: 1.8;
+            ">
+                <div style="
+                    font-size: 22px;
+                    font-weight: 700;
+                    margin-bottom: 16px;
+                    background: linear-gradient(135deg, #6c5ce7, #00cec9);
+                    -webkit-background-clip: text;
+                    -webkit-text-fill-color: transparent;
+                ">${pageData.title}</div>
+                <div style="
+                    background: ${bgColor};
+                    border-radius: 12px;
+                    padding: 16px;
+                    border: 1px solid ${borderColor};
+                ">
+                    ${content}
+                </div>
+                <div style="
+                    margin-top: 16px;
+                    text-align: center;
+                    font-size: 13px;
+                    color: var(--text-muted);
+                    opacity: 0.7;
+                ">
+                    <i class="fas fa-arrow-left"></i> Tap outside to close
+                </div>
+            </div>
+        `;
+        
+        elements.pageModal.classList.add('active');
     }
     
     // ========================================
@@ -564,7 +615,6 @@ class AppController {
         const container = elements.categoryChips;
         container.innerHTML = '';
         
-        // All chip
         const allChip = document.createElement('button');
         allChip.className = 'chip active';
         allChip.dataset.category = 'all';
@@ -577,7 +627,6 @@ class AppController {
         });
         container.appendChild(allChip);
         
-        // Category chips
         if (state.categories && state.categories.length > 0) {
             state.categories.forEach(cat => {
                 const chip = document.createElement('button');
@@ -687,7 +736,7 @@ class AppController {
     }
     
     // ========================================
-    // MODAL
+    // PROMPT MODAL
     // ========================================
     async openPromptModal(promptId) {
         try {
