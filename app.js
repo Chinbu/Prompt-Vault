@@ -1,5 +1,5 @@
 /* ========================================
-   PROMPT VAULT - Main Application
+   PROMPT VAULT - Main Application (Mobile Ad Support)
    ======================================== */
 
 // Supabase Client
@@ -15,6 +15,9 @@ if (tg) {
     tg.expand();
 }
 
+// Detect if mobile
+const isMobile = /Android|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) || window.innerWidth < 768;
+
 // State
 const state = {
     prompts: [],
@@ -29,6 +32,9 @@ const state = {
     adTimer: null,
     adWatchCount: 0,
     isAdWatching: false,
+    isMobile: isMobile,
+    monetagLoaded: false,
+    adRetryCount: 0,
 };
 
 // DOM References
@@ -230,7 +236,7 @@ class ThemeManager {
 }
 
 // ========================================
-// Ad Manager
+// Ad Manager - Mobile Optimized
 // ========================================
 class AdManager {
     constructor() {
@@ -238,58 +244,156 @@ class AdManager {
         this.adInProgress = false;
         this.lastAdTime = 0;
         this.adCooldown = CONFIG.app.adCooldown || 30000;
-        this.setupAutoAds();
+        this.isMobile = state.isMobile;
+        this.retryCount = 0;
+        this.maxRetries = 5;
         this.initAd();
+        this.setupAutoAds();
     }
     
     initAd() {
+        console.log('📢 Initializing Ad Manager...');
+        console.log('📱 Is Mobile:', this.isMobile);
+        
+        // Check if Monetag is loaded
         if (typeof show_11417937 === 'function') {
             this.isReady = true;
-            console.log('✅ Monetag SDK loaded');
-        } else {
-            console.warn('⚠️ Monetag SDK not loaded');
-            setTimeout(() => {
-                if (typeof show_11417937 === 'function') {
-                    this.isReady = true;
-                    console.log('✅ Monetag SDK loaded after delay');
+            state.monetagLoaded = true;
+            console.log('✅ Monetag SDK loaded successfully');
+            return;
+        }
+        
+        // Try to reload SDK
+        this.loadSDK();
+    }
+    
+    loadSDK() {
+        if (this.retryCount >= this.maxRetries) {
+            console.warn('⚠️ Monetag SDK failed to load after', this.maxRetries, 'attempts');
+            return;
+        }
+        
+        this.retryCount++;
+        console.log('🔄 Attempting to load Monetag SDK (attempt', this.retryCount, ')');
+        
+        // Remove existing script
+        const existingScript = document.querySelector('script[data-zone="11417937"]');
+        if (existingScript) {
+            existingScript.remove();
+        }
+        
+        // Create new script
+        const script = document.createElement('script');
+        script.src = '//libtl.com/sdk.js';
+        script.setAttribute('data-zone', '11417937');
+        script.setAttribute('data-sdk', 'show_11417937');
+        script.async = true;
+        
+        script.onload = () => {
+            if (typeof show_11417937 === 'function') {
+                this.isReady = true;
+                state.monetagLoaded = true;
+                console.log('✅ Monetag SDK loaded on retry', this.retryCount);
+                this.showTestAd();
+            } else {
+                console.warn('⚠️ Monetag SDK loaded but show_11417937 not available');
+                setTimeout(() => this.loadSDK(), 3000);
+            }
+        };
+        
+        script.onerror = () => {
+            console.warn('⚠️ Failed to load Monetag SDK, retrying...');
+            setTimeout(() => this.loadSDK(), 3000);
+        };
+        
+        document.head.appendChild(script);
+    }
+    
+    showTestAd() {
+        // Test if ads work on mobile
+        try {
+            show_11417937({
+                type: 'inApp',
+                inAppSettings: {
+                    frequency: 1,
+                    capping: 0.05,
+                    interval: 10,
+                    timeout: 3,
+                    everyPage: false
                 }
-            }, 3000);
+            }).then(() => {
+                console.log('✅ Test ad successful');
+            }).catch((e) => {
+                console.warn('⚠️ Test ad failed:', e);
+            });
+        } catch (e) {
+            console.warn('⚠️ Test ad error:', e);
         }
     }
     
     setupAutoAds() {
+        // Auto ad every 2 minutes (mobile optimized)
         setInterval(() => {
             this.showAutoAd();
         }, CONFIG.app.autoAdInterval || 120000);
+        
+        // On mobile, also show ad on scroll to bottom
+        if (this.isMobile) {
+            let scrollTimeout;
+            window.addEventListener('scroll', () => {
+                clearTimeout(scrollTimeout);
+                scrollTimeout = setTimeout(() => {
+                    if (this.isNearBottom()) {
+                        this.showAutoAd();
+                    }
+                }, 1000);
+            });
+        }
+    }
+    
+    isNearBottom() {
+        const scrollTop = window.scrollY || document.documentElement.scrollTop;
+        const windowHeight = window.innerHeight;
+        const documentHeight = document.documentElement.scrollHeight;
+        return (scrollTop + windowHeight) >= (documentHeight - 200);
     }
     
     async showAutoAd() {
         const now = Date.now();
-        if (now - this.lastAdTime < this.adCooldown || this.adInProgress) return;
+        if (now - this.lastAdTime < this.adCooldown || this.adInProgress) {
+            return;
+        }
         
         if (typeof show_11417937 !== 'function') {
             console.warn('⚠️ Monetag not available for auto ad');
+            this.loadSDK();
             return;
         }
         
         try {
             this.adInProgress = true;
+            
+            // Mobile optimized settings
+            const settings = this.isMobile ? 
+                CONFIG.monetag.mobileSettings : 
+                CONFIG.monetag.desktopSettings;
+            
             await show_11417937({
                 type: 'inApp',
-                inAppSettings: {
-                    frequency: 2,
-                    capping: 0.1,
-                    interval: 30,
-                    timeout: 5,
-                    everyPage: false
-                }
+                inAppSettings: settings
             });
+            
             this.lastAdTime = Date.now();
             if (window.app?.toast) {
                 window.app.toast.show('Thanks for watching!', 'success');
             }
+            console.log('✅ Auto ad completed');
         } catch (error) {
             console.error('Auto ad error:', error);
+            // Try to reload SDK on error
+            if (this.retryCount < this.maxRetries) {
+                this.loadSDK();
+            }
         } finally {
             this.adInProgress = false;
         }
@@ -302,10 +406,24 @@ class AdManager {
                 this.lastAdTime = Date.now();
                 
                 if (typeof show_11417937 === 'function') {
+                    // Show rewarded ad
                     await show_11417937();
                     resolve(true);
                 } else {
-                    this.showFakeAd(resolve);
+                    // Try to load SDK first
+                    console.warn('⚠️ Monetag not available, attempting to load...');
+                    this.loadSDK();
+                    
+                    // Wait for SDK to load
+                    await new Promise(resolve => setTimeout(resolve, 3000));
+                    
+                    if (typeof show_11417937 === 'function') {
+                        await show_11417937();
+                        resolve(true);
+                    } else {
+                        // Use fake ad as fallback
+                        this.showFakeAd(resolve);
+                    }
                 }
             } catch (error) {
                 console.error('Rewarded ad error:', error);
@@ -327,7 +445,7 @@ class AdManager {
         timer.textContent = '0s';
         
         let elapsed = 0;
-        const duration = 5;
+        const duration = this.isMobile ? 3 : 5; // Shorter on mobile
         const interval = setInterval(() => {
             elapsed++;
             const percent = (elapsed / duration) * 100;
@@ -346,6 +464,15 @@ class AdManager {
             overlay.classList.remove('active');
             callback(true);
         };
+        
+        // Auto-close after duration
+        setTimeout(() => {
+            if (overlay.classList.contains('active')) {
+                clearInterval(interval);
+                overlay.classList.remove('active');
+                callback(true);
+            }
+        }, (duration + 2) * 1000);
     }
 }
 
@@ -369,15 +496,16 @@ class ParticleBackground {
     }
     
     initParticles() {
-        const count = Math.min(60, Math.floor(window.innerWidth / 10));
+        const isMobile = window.innerWidth < 768;
+        const count = isMobile ? 30 : 60;
         this.particles = [];
         for (let i = 0; i < count; i++) {
             this.particles.push({
                 x: Math.random() * this.canvas.width,
                 y: Math.random() * this.canvas.height,
-                size: Math.random() * 2.5 + 0.5,
-                speedX: (Math.random() - 0.5) * 0.3,
-                speedY: (Math.random() - 0.5) * 0.3 - 0.1,
+                size: Math.random() * (isMobile ? 2 : 2.5) + 0.5,
+                speedX: (Math.random() - 0.5) * (isMobile ? 0.2 : 0.3),
+                speedY: (Math.random() - 0.5) * (isMobile ? 0.2 : 0.3) - 0.1,
                 opacity: Math.random() * 0.4 + 0.1,
                 color: this.getRandomColor(),
                 life: Math.random() * 100 + 50,
@@ -401,9 +529,9 @@ class ParticleBackground {
                 p.x = Math.random() * this.canvas.width;
                 p.y = -10;
                 p.life = Math.random() * 100 + 50;
-                p.speedX = (Math.random() - 0.5) * 0.3;
+                p.speedX = (Math.random() - 0.5) * (window.innerWidth < 768 ? 0.2 : 0.3);
                 p.speedY = (Math.random() * 0.2 + 0.05);
-                p.size = Math.random() * 2.5 + 0.5;
+                p.size = Math.random() * (window.innerWidth < 768 ? 2 : 2.5) + 0.5;
                 p.color = this.getRandomColor();
             }
             
@@ -442,6 +570,7 @@ class AppController {
         await this.loadCategories();
         await this.loadPrompts();
         console.log('🚀 Prompt Vault initialized');
+        console.log('📱 Mobile mode:', state.isMobile);
     }
     
     setupEventListeners() {
@@ -500,9 +629,7 @@ class AppController {
             }
         });
         
-        // ========================================
-        // PAGE LINKS HANDLER
-        // ========================================
+        // Page Links
         document.querySelectorAll('.footer-links a[data-page]').forEach(link => {
             link.addEventListener('click', (e) => {
                 e.preventDefault();
@@ -511,15 +638,12 @@ class AppController {
             });
         });
         
-        // Telegram - Floating Button
+        // Telegram Floating Button
         elements.floatingTelegram.addEventListener('click', () => {
             window.open(CONFIG.social.telegramGroup, '_blank');
         });
     }
     
-    // ========================================
-    // OPEN PAGE IN-APP
-    // ========================================
     openPage(pageKey) {
         const pageData = CONFIG.pages[pageKey];
         if (!pageData) {
@@ -532,12 +656,8 @@ class AppController {
         const bgColor = isDark ? '#14142e' : '#ffffff';
         const borderColor = isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.08)';
         
-        // Process content - handle Telegram links for Contact page
         let content = pageData.content;
-        
-        // For contact page, process Telegram links to open in new tab
         if (pageKey === 'contact') {
-            // Add target="_blank" to all Telegram links
             content = content.replace(
                 /<a href="(https:\/\/t\.me\/[^"]+)"[^>]*>/g,
                 '<a href="$1" target="_blank" style="display:inline-block; background:linear-gradient(135deg, #0088cc, #00a2e8); color:#ffffff; padding:10px 20px; border-radius:50px; text-decoration:none; font-weight:600; margin-top:8px; transition:all 0.3s ease;" onmouseover="this.style.transform=\'scale(1.05)\'" onmouseout="this.style.transform=\'scale(1)\'">'
