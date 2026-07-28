@@ -19,7 +19,22 @@ const CONFIG = {
     // Monetag Ad Configuration
     monetag: {
         zoneId: '11417937',
-        sdkUrl: '//libtl.com/sdk.js'
+        sdkUrl: '//libtl.com/sdk.js',
+        // Mobile-specific settings
+        mobileSettings: {
+            frequency: 1,
+            capping: 0.05,
+            interval: 20,
+            timeout: 3,
+            everyPage: false
+        },
+        desktopSettings: {
+            frequency: 2,
+            capping: 0.1,
+            interval: 30,
+            timeout: 5,
+            everyPage: false
+        }
     },
     
     // All Pages Content
@@ -174,9 +189,10 @@ const CONFIG = {
     app: {
         name: 'Prompt Vault',
         version: '1.0.0',
-        autoAdInterval: 120000,
-        adCooldown: 30000,
-        maxUnlockAds: 2
+        autoAdInterval: 120000, // 2 minutes
+        adCooldown: 30000, // 30 seconds
+        maxUnlockAds: 2,
+        isMobile: /Android|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent)
     },
     
     // Categories
