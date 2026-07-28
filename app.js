@@ -1,5 +1,5 @@
 /* ========================================
-   PROMPT VAULT - Main Application (Mobile Ad Support)
+   PROMPT VAULT - Main Application (Mobile Ad Fixed)
    ======================================== */
 
 // Supabase Client
@@ -15,7 +15,7 @@ if (tg) {
     tg.expand();
 }
 
-// Detect if mobile
+// Detect mobile
 const isMobile = /Android|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) || window.innerWidth < 768;
 
 // State
@@ -33,8 +33,9 @@ const state = {
     adWatchCount: 0,
     isAdWatching: false,
     isMobile: isMobile,
-    monetagLoaded: false,
+    monetagReady: false,
     adRetryCount: 0,
+    maxAdRetries: 3,
 };
 
 // DOM References
@@ -63,6 +64,8 @@ const elements = {
     adProgress: $('#adProgress'),
     adTimer: $('#adTimer'),
     adSkipBtn: $('#adSkipBtn'),
+    adRetryBtn: $('#adRetryBtn'),
+    adMessage: $('#adMessage'),
 };
 
 // ========================================
@@ -247,6 +250,8 @@ class AdManager {
         this.isMobile = state.isMobile;
         this.retryCount = 0;
         this.maxRetries = 5;
+        this.callback = null;
+        this.adShown = false;
         this.initAd();
         this.setupAutoAds();
     }
@@ -254,17 +259,39 @@ class AdManager {
     initAd() {
         console.log('📢 Initializing Ad Manager...');
         console.log('📱 Is Mobile:', this.isMobile);
+        console.log('🌐 User Agent:', navigator.userAgent);
         
-        // Check if Monetag is loaded
+        // Check if Monetag is already loaded
         if (typeof show_11417937 === 'function') {
             this.isReady = true;
-            state.monetagLoaded = true;
-            console.log('✅ Monetag SDK loaded successfully');
+            state.monetagReady = true;
+            console.log('✅ Monetag SDK already loaded');
+            this.testAd();
             return;
         }
         
-        // Try to reload SDK
+        // Check if window.monetagReady is set
+        if (window.monetagReady && typeof show_11417937 === 'function') {
+            this.isReady = true;
+            state.monetagReady = true;
+            console.log('✅ Monetag SDK ready via window variable');
+            this.testAd();
+            return;
+        }
+        
+        // Try to load SDK
+        console.log('🔄 Loading Monetag SDK...');
         this.loadSDK();
+        
+        // Also check again after a delay
+        setTimeout(() => {
+            if (typeof show_11417937 === 'function') {
+                this.isReady = true;
+                state.monetagReady = true;
+                console.log('✅ Monetag SDK loaded after delay check');
+                this.testAd();
+            }
+        }, 3000);
     }
     
     loadSDK() {
@@ -282,57 +309,63 @@ class AdManager {
             existingScript.remove();
         }
         
-        // Create new script
+        // Create new script with proper attributes
         const script = document.createElement('script');
         script.src = '//libtl.com/sdk.js';
         script.setAttribute('data-zone', '11417937');
         script.setAttribute('data-sdk', 'show_11417937');
         script.async = true;
+        script.crossOrigin = 'anonymous';
         
         script.onload = () => {
-            if (typeof show_11417937 === 'function') {
-                this.isReady = true;
-                state.monetagLoaded = true;
-                console.log('✅ Monetag SDK loaded on retry', this.retryCount);
-                this.showTestAd();
-            } else {
-                console.warn('⚠️ Monetag SDK loaded but show_11417937 not available');
-                setTimeout(() => this.loadSDK(), 3000);
-            }
+            console.log('✅ Monetag SDK script loaded');
+            setTimeout(() => {
+                if (typeof show_11417937 === 'function') {
+                    this.isReady = true;
+                    state.monetagReady = true;
+                    console.log('✅ Monetag SDK ready after load');
+                    this.testAd();
+                } else {
+                    console.warn('⚠️ show_11417937 not available after script load');
+                    // Try again
+                    if (this.retryCount < this.maxRetries) {
+                        setTimeout(() => this.loadSDK(), 2000);
+                    }
+                }
+            }, 500);
         };
         
         script.onerror = () => {
             console.warn('⚠️ Failed to load Monetag SDK, retrying...');
-            setTimeout(() => this.loadSDK(), 3000);
+            if (this.retryCount < this.maxRetries) {
+                setTimeout(() => this.loadSDK(), 2000);
+            }
         };
         
         document.head.appendChild(script);
     }
     
-    showTestAd() {
-        // Test if ads work on mobile
+    testAd() {
+        if (!this.isReady) return;
+        
         try {
+            // Test if ads work on mobile
+            const settings = CONFIG.monetag.adSettings;
             show_11417937({
                 type: 'inApp',
-                inAppSettings: {
-                    frequency: 1,
-                    capping: 0.05,
-                    interval: 10,
-                    timeout: 3,
-                    everyPage: false
-                }
+                inAppSettings: settings
             }).then(() => {
                 console.log('✅ Test ad successful');
             }).catch((e) => {
-                console.warn('⚠️ Test ad failed:', e);
+                console.warn('⚠️ Test ad failed:', e.message || e);
             });
         } catch (e) {
-            console.warn('⚠️ Test ad error:', e);
+            console.warn('⚠️ Test ad error:', e.message || e);
         }
     }
     
     setupAutoAds() {
-        // Auto ad every 2 minutes (mobile optimized)
+        // Auto ad every 2 minutes
         setInterval(() => {
             this.showAutoAd();
         }, CONFIG.app.autoAdInterval || 120000);
@@ -340,7 +373,12 @@ class AdManager {
         // On mobile, also show ad on scroll to bottom
         if (this.isMobile) {
             let scrollTimeout;
+            let lastScrollCheck = 0;
             window.addEventListener('scroll', () => {
+                const now = Date.now();
+                if (now - lastScrollCheck < 5000) return;
+                lastScrollCheck = now;
+                
                 clearTimeout(scrollTimeout);
                 scrollTimeout = setTimeout(() => {
                     if (this.isNearBottom()) {
@@ -355,7 +393,7 @@ class AdManager {
         const scrollTop = window.scrollY || document.documentElement.scrollTop;
         const windowHeight = window.innerHeight;
         const documentHeight = document.documentElement.scrollHeight;
-        return (scrollTop + windowHeight) >= (documentHeight - 200);
+        return (scrollTop + windowHeight) >= (documentHeight - 300);
     }
     
     async showAutoAd() {
@@ -364,6 +402,7 @@ class AdManager {
             return;
         }
         
+        // Check if ad is available
         if (typeof show_11417937 !== 'function') {
             console.warn('⚠️ Monetag not available for auto ad');
             this.loadSDK();
@@ -372,12 +411,9 @@ class AdManager {
         
         try {
             this.adInProgress = true;
+            console.log('📢 Showing auto ad...');
             
-            // Mobile optimized settings
-            const settings = this.isMobile ? 
-                CONFIG.monetag.mobileSettings : 
-                CONFIG.monetag.desktopSettings;
-            
+            const settings = CONFIG.monetag.adSettings;
             await show_11417937({
                 type: 'inApp',
                 inAppSettings: settings
@@ -404,26 +440,21 @@ class AdManager {
             try {
                 this.adInProgress = true;
                 this.lastAdTime = Date.now();
+                this.callback = resolve;
+                
+                // Try to ensure SDK is loaded
+                if (typeof show_11417937 !== 'function') {
+                    console.warn('⚠️ Monetag not available, attempting to load...');
+                    await this.waitForSDK();
+                }
                 
                 if (typeof show_11417937 === 'function') {
-                    // Show rewarded ad
+                    console.log('📢 Showing rewarded ad...');
                     await show_11417937();
                     resolve(true);
                 } else {
-                    // Try to load SDK first
-                    console.warn('⚠️ Monetag not available, attempting to load...');
-                    this.loadSDK();
-                    
-                    // Wait for SDK to load
-                    await new Promise(resolve => setTimeout(resolve, 3000));
-                    
-                    if (typeof show_11417937 === 'function') {
-                        await show_11417937();
-                        resolve(true);
-                    } else {
-                        // Use fake ad as fallback
-                        this.showFakeAd(resolve);
-                    }
+                    console.warn('⚠️ Monetag still not available, using fallback');
+                    this.showFakeAd(resolve);
                 }
             } catch (error) {
                 console.error('Rewarded ad error:', error);
@@ -434,19 +465,45 @@ class AdManager {
         });
     }
     
+    waitForSDK() {
+        return new Promise((resolve) => {
+            let attempts = 0;
+            const maxAttempts = 10;
+            const checkInterval = setInterval(() => {
+                attempts++;
+                if (typeof show_11417937 === 'function') {
+                    clearInterval(checkInterval);
+                    resolve(true);
+                } else if (attempts >= maxAttempts) {
+                    clearInterval(checkInterval);
+                    resolve(false);
+                }
+            }, 500);
+            
+            // Also try loading again
+            this.loadSDK();
+        });
+    }
+    
     showFakeAd(callback) {
         const overlay = elements.adOverlay;
         const progress = elements.adProgress;
         const timer = elements.adTimer;
         const skipBtn = elements.adSkipBtn;
+        const retryBtn = elements.adRetryBtn;
+        const message = elements.adMessage;
         
+        // Reset UI
         overlay.classList.add('active');
         progress.style.width = '0%';
         timer.textContent = '0s';
+        retryBtn.style.display = 'none';
+        message.textContent = 'Please watch this short ad to access the full prompt.';
+        skipBtn.style.display = 'block';
         
         let elapsed = 0;
-        const duration = this.isMobile ? 3 : 5; // Shorter on mobile
-        const interval = setInterval(() => {
+        const duration = this.isMobile ? 3 : 5;
+        let interval = setInterval(() => {
             elapsed++;
             const percent = (elapsed / duration) * 100;
             progress.style.width = Math.min(percent, 100) + '%';
@@ -459,20 +516,21 @@ class AdManager {
             }
         }, 1000);
         
+        // Skip button
         skipBtn.onclick = () => {
             clearInterval(interval);
             overlay.classList.remove('active');
             callback(true);
         };
         
-        // Auto-close after duration
+        // Auto-close after duration + buffer
         setTimeout(() => {
             if (overlay.classList.contains('active')) {
                 clearInterval(interval);
                 overlay.classList.remove('active');
                 callback(true);
             }
-        }, (duration + 2) * 1000);
+        }, (duration + 3) * 1000);
     }
 }
 
@@ -497,16 +555,16 @@ class ParticleBackground {
     
     initParticles() {
         const isMobile = window.innerWidth < 768;
-        const count = isMobile ? 30 : 60;
+        const count = isMobile ? 25 : 50;
         this.particles = [];
         for (let i = 0; i < count; i++) {
             this.particles.push({
                 x: Math.random() * this.canvas.width,
                 y: Math.random() * this.canvas.height,
-                size: Math.random() * (isMobile ? 2 : 2.5) + 0.5,
-                speedX: (Math.random() - 0.5) * (isMobile ? 0.2 : 0.3),
-                speedY: (Math.random() - 0.5) * (isMobile ? 0.2 : 0.3) - 0.1,
-                opacity: Math.random() * 0.4 + 0.1,
+                size: Math.random() * (isMobile ? 1.5 : 2.5) + 0.5,
+                speedX: (Math.random() - 0.5) * (isMobile ? 0.15 : 0.3),
+                speedY: (Math.random() - 0.5) * (isMobile ? 0.15 : 0.3) - 0.05,
+                opacity: Math.random() * 0.3 + 0.1,
                 color: this.getRandomColor(),
                 life: Math.random() * 100 + 50,
             });
@@ -529,9 +587,9 @@ class ParticleBackground {
                 p.x = Math.random() * this.canvas.width;
                 p.y = -10;
                 p.life = Math.random() * 100 + 50;
-                p.speedX = (Math.random() - 0.5) * (window.innerWidth < 768 ? 0.2 : 0.3);
-                p.speedY = (Math.random() * 0.2 + 0.05);
-                p.size = Math.random() * (window.innerWidth < 768 ? 2 : 2.5) + 0.5;
+                p.speedX = (Math.random() - 0.5) * (window.innerWidth < 768 ? 0.15 : 0.3);
+                p.speedY = (Math.random() * 0.15 + 0.05);
+                p.size = Math.random() * (window.innerWidth < 768 ? 1.5 : 2.5) + 0.5;
                 p.color = this.getRandomColor();
             }
             
@@ -571,6 +629,7 @@ class AppController {
         await this.loadPrompts();
         console.log('🚀 Prompt Vault initialized');
         console.log('📱 Mobile mode:', state.isMobile);
+        console.log('📢 Monetag ready:', state.monetagReady);
     }
     
     setupEventListeners() {
@@ -1004,4 +1063,5 @@ class AppController {
 document.addEventListener('DOMContentLoaded', () => {
     const app = new AppController();
     window.app = app;
+    console.log('🚀 Prompt Vault initialized');
 });
