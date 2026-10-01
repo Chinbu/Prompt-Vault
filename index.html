@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#6c5ce7">
+<title>Prompt Vault - AI Prompt Library</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+<link rel="stylesheet" href="style.css">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.39.0/dist/umd/supabase.min.js"></script>
+<script src="config.js"></script>
+</head>
+<body>
+
+<canvas id="particleCanvas"></canvas>
+
+<div id="app">
+  <header class="header glass">
+    <div class="logo" id="logoBtn">
+      <i class="fas fa-crown"></i>
+      <span>Prompt Vault</span>
+    </div>
+    <div class="header-right">
+      <button class="icon-btn" id="themeToggle" aria-label="Theme"><i class="fas fa-moon"></i></button>
+      <button class="icon-btn" id="searchToggle" aria-label="Search"><i class="fas fa-search"></i></button>
+    </div>
+  </header>
+
+  <div class="search-container" id="searchContainer">
+    <div class="search-box glass">
+      <i class="fas fa-search"></i>
+      <input type="text" id="searchInput" placeholder="Search prompts..." autocomplete="off">
+      <button id="clearSearch" class="clear-search"><i class="fas fa-times"></i></button>
+    </div>
+  </div>
+
+  <nav class="nav-tabs glass">
+    <button class="nav-tab active" data-tab="home"><i class="fas fa-home"></i><span>Home</span></button>
+    <button class="nav-tab" data-tab="trending"><i class="fas fa-fire"></i><span>Trending</span></button>
+    <button class="nav-tab" data-tab="featured"><i class="fas fa-star"></i><span>Featured</span></button>
+    <button class="nav-tab" data-tab="categories"><i class="fas fa-th-list"></i><span>Categories</span></button>
+  </nav>
+
+  <div class="category-chips" id="categoryChips">
+    <div class="chip-loading">Loading categories...</div>
+  </div>
+
+  <main class="prompts-grid" id="promptsGrid">
+    <div class="loading-spinner"><i class="fas fa-spinner fa-spin"></i><p>Loading prompts...</p></div>
+  </main>
+
+  <div class="promotion-banner glass">
+    <div class="promotion-content">
+      <i class="fas fa-rocket"></i>
+      <div class="promotion-text">
+        <h4>Join Our Community</h4>
+        <p>Get daily prompts &amp; exclusive content</p>
+      </div>
+      <div class="promotion-links">
+        <a class="promo-btn telegram-btn" href="https://t.me/+4s4mTS5NRi02M2E1" id="promoTelegramBtn" target="_blank" rel="noopener"><i class="fab fa-telegram"></i></a>
+        <a class="promo-btn whatsapp-btn" href="https://www.whatsapp.com/channel/0029Vb6Uy0dCRs1phBNPrq0a" id="promoWhatsappBtn" target="_blank" rel="noopener"><i class="fab fa-whatsapp"></i></a>
+      </div>
+    </div>
+  </div>
+
+  <footer class="footer">
+    <div class="footer-links">
+      <a href="#" data-page="about"><i class="fas fa-info-circle"></i> About</a>
+      <a href="#" data-page="privacy"><i class="fas fa-shield-alt"></i> Privacy</a>
+      <a href="#" data-page="terms"><i class="fas fa-file-contract"></i> Terms</a>
+      <a href="https://t.me/+4s4mTS5NRi02M2E1" id="footerChannelLink" target="_blank" rel="noopener"><i class="fab fa-telegram"></i> Channel</a>
+      <a href="#" data-page="contact"><i class="fas fa-envelope"></i> Contact</a>
+    </div>
+    <div class="footer-bottom"><p>&copy; 2024 Prompt Vault. All rights reserved.</p></div>
+  </footer>
+
+  <a class="floating-telegram" id="floatingTelegram" href="https://t.me/+MewA_UWlGpgzNThl" target="_blank" rel="noopener" aria-label="Telegram">
+    <i class="fab fa-telegram-plane"></i>
+  </a>
+</div>
+
+<div class="modal" id="promptModal">
+  <div class="modal-content glass">
+    <button class="modal-close" id="modalClose"><i class="fas fa-times"></i></button>
+    <div class="modal-body" id="modalBody"></div>
+  </div>
+</div>
+
+<div class="modal" id="pageModal">
+  <div class="modal-content glass">
+    <button class="modal-close" id="pageModalClose"><i class="fas fa-times"></i></button>
+    <div class="page-content" id="pageContent"></div>
+  </div>
+</div>
+
+<div id="adminOverlay">
+  <div class="admin-panel" id="adminPanel">
+    <div class="admin-header">
+      <h2><i class="fas fa-shield-alt"></i> Admin Panel</h2>
+      <button class="admin-close" id="adminClose"><i class="fas fa-times"></i></button>
+    </div>
+    <div id="adminContent"></div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script src="app.js"></script>
+</body>
+</html>
