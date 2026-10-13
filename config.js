@@ -18,8 +18,8 @@ const CONFIG = {
 
     ads: {
         networks: [
-            'https://omg10.com/4/11251409',
-            'https://omg10.com/4/9965491'
+            'https://uplcm.com/4/12014046',
+            'https://uplcm.com/4/11251409'
         ],
         requiredAds: {
             default: 1,
